@@ -41,7 +41,8 @@ static s32 lsv_member_open(struct lsv_back *member, const char *path)
 		return -ENOMEM;
 
 	bd_file = bdev_file_open_by_path(path, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
-	if (IS_ERR(bd_file)) {
+	if (IS_ERR(bd_file))
+	{
 		kfree(member_path);
 		return PTR_ERR(bd_file);
 	}
@@ -75,7 +76,8 @@ s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 		return -ENOMEM;
 
 	vdev->members = kcalloc(params->nr_members, sizeof(*vdev->members), GFP_KERNEL);
-	if (!vdev->members) {
+	if (!vdev->members)
+	{
 		rc = -ENOMEM;
 		goto free_vdev;
 	}
@@ -85,7 +87,8 @@ s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 	vdev->cell_sectors = params->cell_sectors;
 	vdev->chunk_sectors = params->chunk_sectors;
 
-	for (i = 0; i < vdev->nr_members; i++) {
+	for (i = 0; i < vdev->nr_members; i++)
+	{
 		rc = lsv_member_open(&vdev->members[i], params->paths[i]);
 		if (rc)
 			goto close_members;
@@ -99,7 +102,8 @@ s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 	if (rc)
 		goto destroy_layout;
 
-	if (!vdev->capacity_sectors) {
+	if (!vdev->capacity_sectors)
+	{
 		rc = -ENOSPC;
 		goto destroy_layout;
 	}
@@ -121,11 +125,23 @@ free_vdev:
 	return rc;
 }
 
-/*
- * Free vdev. Replaces lsv_dev_close_back().
- */
 void lsv_vdev_destroy(struct lsv_vdev *vdev)
 {
+	u32 i;
+
+	if (!vdev)
+		return;
+
+	if (vdev->ops->destroy)
+		vdev->ops->destroy(vdev);
+
+	bioset_exit(&vdev->bio_set);
+
+	for (i = vdev->nr_members; i > 0; i--)
+		lsv_member_close(&vdev->members[i - 1]);
+
+	kfree(vdev->members);
+	kfree(vdev);
 }
 
 u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)
