@@ -58,9 +58,9 @@ struct lsv_layout_ops
 	const char *name;
 	enum lsv_layout_type type;
 
-	s32 (*geometry)(struct lsv_vdev *v);				   // Calculate capacity_sectors from the members.
-	s32 (*submit)(struct lsv_vdev *v, struct lsv_vio *io); // Execute one logical I/O request.
-	void (*destroy)(struct lsv_vdev *v);				   // Free layout-private data (v->layout_priv).
+	s32 (*geometry)(struct lsv_vdev *vdev);				   // Calculate capacity_sectors from the members.
+	s32 (*submit)(struct lsv_vdev *vdev, struct lsv_vio *io); // Execute one logical I/O request.
+	void (*destroy)(struct lsv_vdev *vdev);				   // Free layout-private data (vdev->layout_priv).
 };
 
 /*
@@ -99,12 +99,12 @@ const struct lsv_layout_ops *lsv_layout_lookup(const char *name);
  * Replaces lsv_dev_open_back() in dev.c.
  */
 s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out);
-void lsv_vdev_destroy(struct lsv_vdev *v);
+void lsv_vdev_destroy(struct lsv_vdev *vdev);
 
 /*
  * Usable device capacity in sectors.
  */
-u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *v);
+u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev);
 
 /* ---- Logical I/O submission ---- */
 
@@ -113,26 +113,26 @@ u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *v);
  *   bio->bi_iter.bi_sector = lsv_lmap_data_sector(...); submit_bio_noacct(bio);
  * Creates lsv_vio and delegates to the layout (ops->submit).
  */
-s32 lsv_vdev_submit(struct lsv_vdev *v, struct bio *piece, sector_t vsector);
+s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector);
 
-s32 lsv_vdev_flush(struct lsv_vdev *v, struct bio *piece);
+s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece);
 
 /*
  * Usable member capacity in sectors, excluding the metadata reserve
  * and rounded down to whole cells.
  * Use bdev_nr_sectors(member->bd) for the underlying capacity.
  */
-u64 lsv_member_usable_sectors(const struct lsv_vdev *v, const struct lsv_back *member);
+u64 lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member);
 
 /*
  * Synchronous read or write at vsector, waiting for completion.
  */
-s32 lsv_vdev_io_sync(struct lsv_vdev *v, enum req_op op, sector_t vsector, void *buf, size_t len);
+s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, void *buf, size_t len);
 
 /*
  * Allocate a member clone, increment pending and submit it.
  */
-s32 lsv_vdev_member_submit(struct lsv_vdev *v, struct lsv_vio *io, const struct lsv_vdev_target *t);
+s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const struct lsv_vdev_target *t);
 
 /*
  * Complete one member bio (assigned to clone->bi_end_io).

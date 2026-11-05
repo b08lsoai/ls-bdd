@@ -124,28 +124,28 @@ free_vdev:
 /*
  * Free vdev. Replaces lsv_dev_close_back().
  */
-void lsv_vdev_destroy(struct lsv_vdev *v)
+void lsv_vdev_destroy(struct lsv_vdev *vdev)
 {
 }
 
-u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *v)
+u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)
 {
-	return v->capacity_sectors;
+	return vdev->capacity_sectors;
 }
 
 /*
  *   1. Allocate lsv_vio and save piece and vsector.
  *   2. Set pending = 1 (the submitter reference).
- *   3. Call v->ops->submit(v, io).
+ *   3. Call vdev->ops->submit(vdev, io).
  *   4. After submission, drop the submitter reference; if pending
  *      reaches zero, complete io.
  */
-s32 lsv_vdev_submit(struct lsv_vdev *v, struct bio *piece, sector_t vsector)
+s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector)
 {
 	return -ENOSYS;
 }
 
-s32 lsv_vdev_flush(struct lsv_vdev *v, struct bio *piece)
+s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)
 {
 	return -ENOSYS;
 }
@@ -155,7 +155,7 @@ s32 lsv_vdev_flush(struct lsv_vdev *v, struct bio *piece)
  * and round down to whole cells.
  * Use bdev_nr_sectors(member->bd) for the underlying capacity.
  */
-u64 lsv_member_usable_sectors(const struct lsv_vdev *v, const struct lsv_back *member)
+u64 lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member)
 {
 	return 0;
 }
@@ -163,7 +163,7 @@ u64 lsv_member_usable_sectors(const struct lsv_vdev *v, const struct lsv_back *m
 /*
  * Synchronous read or write at vsector, waiting for completion.
  */
-s32 lsv_vdev_io_sync(struct lsv_vdev *v, enum req_op op, sector_t vsector, void *buf, size_t len)
+s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, void *buf, size_t len)
 {
 	return -ENOSYS;
 }
@@ -177,7 +177,7 @@ s32 lsv_vdev_io_sync(struct lsv_vdev *v, enum req_op op, sector_t vsector, void 
  *   5. atomic_inc(&io->pending);
  *   6. submit_bio_noacct(clone).
  */
-s32 lsv_vdev_member_submit(struct lsv_vdev *v, struct lsv_vio *io, const struct lsv_vdev_target *t)
+s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const struct lsv_vdev_target *t)
 {
 	return -ENOSYS;
 }
