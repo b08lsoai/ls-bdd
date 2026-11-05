@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
 #include <linux/err.h>
+#include <linux/file.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 
@@ -28,6 +29,39 @@ const struct lsv_layout_ops *lsv_layout_lookup(const char *name)
 			return g_layouts[i];
 
 	return NULL;
+}
+
+static s32 lsv_member_open(struct lsv_back *member, const char *path)
+{
+	struct file *bd_file;
+	char *member_path;
+
+	member_path = kstrdup(path, GFP_KERNEL);
+	if (!member_path)
+		return -ENOMEM;
+
+	bd_file = bdev_file_open_by_path(path, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
+	if (IS_ERR(bd_file)) {
+		kfree(member_path);
+		return PTR_ERR(bd_file);
+	}
+
+	member->path = member_path;
+	member->bd_file = bd_file;
+	member->bd = file_bdev(bd_file);
+
+	return 0;
+}
+
+static void lsv_member_close(struct lsv_back *member)
+{
+	if (member->bd_file)
+		fput(member->bd_file);
+
+	member->bd_file = NULL;
+	member->bd = NULL;
+	kfree(member->path);
+	member->path = NULL;
 }
 
 /*
