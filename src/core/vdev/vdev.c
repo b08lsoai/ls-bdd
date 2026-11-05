@@ -64,12 +64,61 @@ static void lsv_member_close(struct lsv_back *member)
 	member->path = NULL;
 }
 
-/*
- * Create the virtual device. Replaces lsv_dev_open_back().
- */
 s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 {
-	return -ENOSYS;
+	struct lsv_vdev *vdev;
+	s32 rc;
+	u32 i;
+
+	vdev = kzalloc(sizeof(*vdev), GFP_KERNEL);
+	if (!vdev)
+		return -ENOMEM;
+
+	vdev->members = kcalloc(params->nr_members, sizeof(*vdev->members), GFP_KERNEL);
+	if (!vdev->members) {
+		rc = -ENOMEM;
+		goto free_vdev;
+	}
+
+	vdev->ops = params->ops;
+	vdev->nr_members = params->nr_members;
+	vdev->cell_sectors = params->cell_sectors;
+	vdev->chunk_sectors = params->chunk_sectors;
+
+	for (i = 0; i < vdev->nr_members; i++) {
+		rc = lsv_member_open(&vdev->members[i], params->paths[i]);
+		if (rc)
+			goto close_members;
+	}
+
+	rc = bioset_init(&vdev->bio_set, BIO_POOL_SIZE, 0, BIOSET_NEED_BVECS);
+	if (rc)
+		goto close_members;
+
+	rc = vdev->ops->geometry(vdev);
+	if (rc)
+		goto destroy_layout;
+
+	if (!vdev->capacity_sectors) {
+		rc = -ENOSPC;
+		goto destroy_layout;
+	}
+
+	*out = vdev;
+	return 0;
+
+destroy_layout:
+	/* geometry may have allocated private state before failing. */
+	if (vdev->ops->destroy)
+		vdev->ops->destroy(vdev);
+	bioset_exit(&vdev->bio_set);
+close_members:
+	while (i > 0)
+		lsv_member_close(&vdev->members[--i]);
+	kfree(vdev->members);
+free_vdev:
+	kfree(vdev);
+	return rc;
 }
 
 /*
