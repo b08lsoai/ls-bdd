@@ -241,11 +241,28 @@ s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const stru
 
 /*
  * Complete one member bio (assigned to clone->bi_end_io).
- * Account for its result according to the layout policy.
- * If pending reaches zero, complete io with the final io->status.
+ * Linear/RAID0 policy: preserve the first error. RAID1 will need
+ * layout-specific result handling before it can submit member I/O.
  */
 void lsv_member_endio(struct bio *clone)
 {
+	struct lsv_member_io *member_io = clone->bi_private;
+	struct lsv_vio *io = member_io->io;
+	unsigned long flags;
+
+	if (clone->bi_status != BLK_STS_OK)
+	{
+		spin_lock_irqsave(&io->lock, flags);
+		if (io->status == BLK_STS_OK)
+			io->status = clone->bi_status;
+		spin_unlock_irqrestore(&io->lock, flags);
+	}
+
+	bio_put(clone);
+	kfree(member_io);
+
+	if (atomic_dec_and_test(&io->pending))
+		lsv_vio_complete(io);
 }
 
 void lsv_vio_complete(struct lsv_vio *io)
