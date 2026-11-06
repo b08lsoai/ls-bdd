@@ -150,16 +150,36 @@ u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)
 	return vdev->capacity_sectors;
 }
 
-/*
- *   1. Allocate lsv_vio and save piece and vsector.
- *   2. Set pending = 1 (the submitter reference).
- *   3. Call vdev->ops->submit(vdev, io).
- *   4. After submission, drop the submitter reference; if pending
- *      reaches zero, complete io.
- */
 s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector)
 {
-	return -ENOSYS;
+	struct lsv_vio *vio;
+	unsigned long flags;
+	s32 rc;
+
+	vio = kzalloc(sizeof(*vio), GFP_NOIO);
+	if (!vio)
+		return -ENOMEM;
+
+	vio->bio = piece;
+	vio->vdev = vdev;
+	vio->vsector = vsector;
+	vio->status = BLK_STS_OK;
+	spin_lock_init(&vio->lock);
+	atomic_set(&vio->pending, 1);
+
+	rc = vdev->ops->submit(vdev, vio);
+	if (rc < 0)
+	{
+		spin_lock_irqsave(&vio->lock, flags);
+		if (vio->status == BLK_STS_OK)
+			vio->status = errno_to_blk_status(rc);
+		spin_unlock_irqrestore(&vio->lock, flags);
+	}
+
+	if (atomic_dec_and_test(&vio->pending))
+		lsv_vio_complete(vio);
+
+	return 0;
 }
 
 s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)

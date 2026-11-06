@@ -49,6 +49,7 @@ struct lsv_vio
 	sector_t vsector;
 
 	atomic_t pending; // Outstanding member bios plus one reference held during submission.
+	spinlock_t lock; // Protects status updates from submit and endio.
 	blk_status_t status; // Logical request result according to the layout policy.
 };
 
