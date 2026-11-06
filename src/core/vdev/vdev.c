@@ -2,6 +2,7 @@
 
 #include <linux/err.h>
 #include <linux/file.h>
+#include <linux/math.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 
@@ -166,14 +167,14 @@ s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)
 	return -ENOSYS;
 }
 
-/*
- * Usable member capacity in sectors: subtract the metadata reserve
- * and round down to whole cells.
- * Use bdev_nr_sectors(member->bd) for the underlying capacity.
- */
 u64 lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member)
 {
-	return 0;
+	u64 sectors = bdev_nr_sectors(member->bd);
+
+	if (sectors <= LSV_MEMBER_META_SECTORS)
+		return 0;
+
+	return round_down(sectors - LSV_MEMBER_META_SECTORS, vdev->cell_sectors);
 }
 
 /*

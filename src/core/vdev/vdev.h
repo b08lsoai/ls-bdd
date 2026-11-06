@@ -8,6 +8,9 @@
 #include <linux/blkdev.h>
 #include <linux/types.h>
 
+/* Sectors reserved at the head of the backing device for metadata. */
+#define LSV_MEMBER_META_SECTORS 32
+
 struct lsv_back
 {
 	char *path;
