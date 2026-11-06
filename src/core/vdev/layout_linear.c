@@ -37,9 +37,6 @@ static s32 lsv_linear_submit(struct lsv_vdev *vdev, struct lsv_vio *io)
 			continue;
 		}
 
-		if (bio_sectors(io->bio) > usable - member_offset)
-			return -EIO;
-
 		target.member = &vdev->members[i];
 		target.member_sector = LSV_MEMBER_META_SECTORS + member_offset;
 
