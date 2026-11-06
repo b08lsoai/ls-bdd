@@ -8,6 +8,12 @@
 
 #include "core/vdev/vdev.h"
 
+struct lsv_member_io
+{
+	struct lsv_vio *io;
+	struct lsv_back *member;
+};
+
 extern const struct lsv_layout_ops lsv_layout_linear_ops;
 extern const struct lsv_layout_ops lsv_layout_raid0_ops;
 extern const struct lsv_layout_ops lsv_layout_raid1_ops;
@@ -205,18 +211,32 @@ s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, vo
 	return -ENOSYS;
 }
 
-/*
- * Submit one member bio.
- *   1. clone = bio_alloc_clone(...);
- *   2. clone->bi_iter.bi_sector = t->member_sector;
- *   3. Save io and t->member in the clone->bi_private context.
- *   4. clone->bi_end_io = lsv_member_endio;
- *   5. atomic_inc(&io->pending);
- *   6. submit_bio_noacct(clone).
- */
 s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const struct lsv_vdev_target *t)
 {
-	return -ENOSYS;
+	struct lsv_member_io *member_io;
+	struct bio *clone;
+
+	member_io = kmalloc(sizeof(*member_io), GFP_NOIO);
+	if (!member_io)
+		return -ENOMEM;
+
+	clone = bio_alloc_clone(t->member->bd, io->bio, GFP_NOIO, &vdev->bio_set);
+	if (!clone)
+	{
+		kfree(member_io);
+		return -ENOMEM;
+	}
+
+	member_io->io = io;
+	member_io->member = t->member;
+
+	clone->bi_iter.bi_sector = t->member_sector;
+	clone->bi_private = member_io;
+	clone->bi_end_io = lsv_member_endio;
+
+	atomic_inc(&io->pending);
+	submit_bio_noacct(clone);
+	return 0;
 }
 
 /*
