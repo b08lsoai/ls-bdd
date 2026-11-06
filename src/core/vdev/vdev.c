@@ -208,12 +208,9 @@ void lsv_member_endio(struct bio *clone)
 {
 }
 
-/*
- * Complete the logical I/O request once all required member bios finish.
- *
- * Set io->bio->bi_status = io->status and call bio_endio(io->bio),
- * which leads to lsv_bio_end_io. Then free io.
- */
 void lsv_vio_complete(struct lsv_vio *io)
 {
+	io->bio->bi_status = io->status;
+	bio_endio(io->bio);
+	kfree(io);
 }
