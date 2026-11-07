@@ -10,7 +10,6 @@
 #include "core/dedup/dedup.h"
 #include "core/lmap/lmap.h"
 
-#define LSV_BIO_SUBMIT 0
 #define LSV_BIO_DONE 1
 
 static struct kmem_cache *g_lsv_bio_req_cachep;
@@ -49,7 +48,7 @@ static struct lsv_bio_req *lsv_bio_req_alloc(struct lsv_dev *dev, struct bio *bi
 	if (!req)
 		return NULL;
 
-	req->clone = bio_alloc_clone(dev->back.bd, bio, GFP_NOIO, &dev->lmap.bio_set);
+	req->clone = bio_alloc_clone(bio->bi_bdev, bio, GFP_NOIO, &dev->lmap.bio_set);
 	if (!req->clone) {
 		kmem_cache_free(g_lsv_bio_req_cachep, req);
 		return NULL;
@@ -66,9 +65,9 @@ static struct lsv_bio_req *lsv_bio_req_alloc(struct lsv_dev *dev, struct bio *bi
 }
 
 /*
- * Lets dedup pick the physical cell. Returns LSV_BIO_SUBMIT with *|pblk| set when
- * the data is to be written out, LSV_BIO_DONE when dedup took the bio over, or a
- * negative error.
+ * Lets dedup pick the physical cell. Returns zero with *|pblk| set when the data
+ * is to be written out, LSV_BIO_DONE when dedup took the bio over, or a negative
+ * error.
  */
 static s32 lsv_bio_setup_dedup_write(struct lsv_dev *dev, struct bio *bio, u64 lba, struct lsv_pblk **pblk)
 {
@@ -81,13 +80,14 @@ static s32 lsv_bio_setup_dedup_write(struct lsv_dev *dev, struct bio *bio, u64 l
 	if (!lsv_de_is_new(rc))
 		return LSV_BIO_DONE;
 
-	return LSV_BIO_SUBMIT;
+	return 0;
 }
 
 static s32 lsv_bio_setup_write(struct lsv_dev *dev, struct bio *bio, u64 lba, u32 offset, u32 sectors)
 {
 	struct lsv_lmap *lmap = &dev->lmap;
 	struct lsv_pblk *pblk;
+	sector_t vsector;
 	u64 pba;
 	s32 rc;
 
@@ -120,9 +120,8 @@ static s32 lsv_bio_setup_write(struct lsv_dev *dev, struct bio *bio, u64 lba, u3
 		return rc;
 	}
 
-	bio->bi_iter.bi_sector = lsv_lmap_data_sector(lmap, pba);
-
-	return LSV_BIO_SUBMIT;
+	vsector = (pba << lmap->cell_sect_shift) + offset;
+	return lsv_vdev_submit(dev->vdev, bio, vsector);
 }
 
 /*
@@ -131,17 +130,18 @@ static s32 lsv_bio_setup_write(struct lsv_dev *dev, struct bio *bio, u64 lba, u3
  */
 static s32 lsv_bio_setup_read(struct lsv_dev *dev, struct bio *bio, u64 lba, u32 offset)
 {
+	struct lsv_lmap *lmap = &dev->lmap;
+	sector_t vsector;
 	u64 pba;
 
-	if (!lsv_lmap_lookup_pba(&dev->lmap, lba, &pba)) {
+	if (!lsv_lmap_lookup_pba(lmap, lba, &pba)) {
 		zero_fill_bio(bio);
 		bio_endio(bio);
 		return LSV_BIO_DONE;
 	}
 
-	bio->bi_iter.bi_sector = lsv_lmap_data_sector(&dev->lmap, pba) + offset;
-
-	return LSV_BIO_SUBMIT;
+	vsector = (pba << lmap->cell_sect_shift) + offset;
+	return lsv_vdev_submit(dev->vdev, bio, vsector);
 }
 
 static s32 lsv_bio_setup_bio(struct lsv_bio_req *req, struct bio *bio, u64 lba, u32 offset, u32 sectors)
@@ -163,12 +163,13 @@ static void lsv_bio_process(struct lsv_bio_req *req)
 {
 	struct lsv_lmap *lmap = &req->dev->lmap;
 	struct bio *clone = req->clone;
-	struct bio *bio;
+	struct bio *bio = NULL;
 	s32 rc;
 
-	/* Flushes and other payload free requests are passed straight through. */
 	if (!bio_sectors(clone)) {
-		submit_bio_noacct(clone);
+		rc = lsv_vdev_flush(req->dev->vdev, clone);
+		if (rc < 0)
+			goto err;
 		return;
 	}
 
@@ -194,18 +195,18 @@ static void lsv_bio_process(struct lsv_bio_req *req)
 		if (rc < 0)
 			goto err;
 
-		if (rc == LSV_BIO_SUBMIT)
-			submit_bio_noacct(bio);
-
 		if (bio == clone)
 			return;
 	}
 
 err:
-	if (bio && bio != clone)
-		bio_io_error(bio);
+	clone->bi_status = errno_to_blk_status(rc);
+	if (bio && bio != clone) {
+		bio->bi_status = clone->bi_status;
+		bio_endio(bio);
+	}
 
-	bio_io_error(clone);
+	bio_endio(clone);
 }
 
 static void lsv_submit_bio(struct bio *bio)
