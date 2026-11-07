@@ -7,6 +7,7 @@
 #include <linux/list.h>
 
 #include "core/lmap/lmap.h"
+#include "core/vdev/vdev.h"
 
 #define LSV_BLKDEV_NAME_PREFIX "lsv"
 #define LSV_MAX_MINORS 64
@@ -19,20 +20,17 @@ struct lsv_front {
 	s32 minor;
 };
 
-struct lsv_back {
-	char *path;
-	struct file *bd_file;
-	struct block_device *bd;
-};
-
 /*
  * Everything the core needs in order to instantiate a device. Filled in by the
  * control layer; deliberately free of any configfs types.
  */
 struct lsv_dev_params {
 	const char *name; /* device identity, becomes disk_name */
-	const char *back_path;
+	const char *const *back_paths;
+	u32 nr_members;
+	const char *layout;
 	const char *index_ds;
+	u32 chunk_sectors;
 	u32 cell_size;
 	u64 segment_size;
 	bool dedup;
@@ -40,7 +38,7 @@ struct lsv_dev_params {
 
 struct lsv_dev {
 	struct lsv_front front;
-	struct lsv_back back;
+	struct lsv_vdev *vdev;
 
 	struct lsv_lmap lmap;
 	struct lsv_dedup *dedup; /* NULL when dedup is off */

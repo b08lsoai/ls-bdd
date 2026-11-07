@@ -14,39 +14,6 @@
 
 static DEFINE_IDA(lsv_minor_ida);
 
-static s32 lsv_dev_open_back(struct lsv_dev *dev, const char *path)
-{
-	struct file *bd_file;
-
-	dev->back.path = kstrdup(path, GFP_KERNEL);
-	if (!dev->back.path)
-		return -ENOMEM;
-
-	bd_file = bdev_file_open_by_path(path, BLK_OPEN_READ | BLK_OPEN_WRITE, NULL, NULL);
-	if (IS_ERR(bd_file)) {
-		kfree(dev->back.path);
-		dev->back.path = NULL;
-		return PTR_ERR(bd_file);
-	}
-
-	dev->back.bd_file = bd_file;
-	dev->back.bd = file_bdev(bd_file);
-
-	return 0;
-}
-
-static void lsv_dev_close_back(struct lsv_dev *dev)
-{
-	if (dev->back.bd_file) {
-		fput(dev->back.bd_file);
-		dev->back.bd_file = NULL;
-		dev->back.bd = NULL;
-	}
-
-	kfree(dev->back.path);
-	dev->back.path = NULL;
-}
-
 static s32 lsv_dev_add_disk(struct lsv_dev *dev)
 {
 	struct gendisk *disk;
@@ -70,7 +37,7 @@ static s32 lsv_dev_add_disk(struct lsv_dev *dev)
 	disk->private_data = dev;
 	strscpy(disk->disk_name, dev->front.name, sizeof(disk->disk_name));
 
-	set_capacity(disk, get_capacity(dev->back.bd->bd_disk));
+	set_capacity(disk, lsv_vdev_capacity_sectors(dev->vdev));
 
 	rc = add_disk(disk);
 	if (rc) {
@@ -110,7 +77,15 @@ s32 lsv_dev_create(const struct lsv_dev_params *params, struct lsv_dev **out)
 		goto free_dev;
 	}
 
-	rc = lsv_dev_open_back(dev, params->back_path);
+	struct lsv_vdev_params vparams = {
+		.ops = lsv_layout_lookup(params->layout),
+		.paths = params->back_paths,
+		.nr_members = params->nr_members,
+		.cell_sectors = params->cell_size >> SECTOR_SHIFT,
+		.chunk_sectors = params->chunk_sectors,
+	};
+
+	rc = lsv_vdev_create(&vparams, &dev->vdev);
 	if (rc)
 		goto free_dev;
 
@@ -167,7 +142,7 @@ void lsv_dev_destroy(struct lsv_dev *dev)
 	/* Before lmap: pending verifies still hold pblks and bios of this device. */
 	lsv_dedup_destroy(dev->dedup);
 	lsv_lmap_deinit(&dev->lmap);
-	lsv_dev_close_back(dev);
+	lsv_vdev_destroy(dev->vdev);
 
 	kfree(dev);
 }
