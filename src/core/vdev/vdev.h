@@ -6,6 +6,7 @@
 #include <linux/atomic.h>
 #include <linux/bio.h>
 #include <linux/blkdev.h>
+#include <linux/spinlock.h>
 #include <linux/types.h>
 
 /* Sectors reserved at the head of the backing device for metadata. */

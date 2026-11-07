@@ -190,7 +190,42 @@ s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector)
 
 s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)
 {
-	return -ENOSYS;
+	struct lsv_vio *vio;
+	unsigned long flags;
+	s32 rc;
+	u32 i;
+
+	vio = kzalloc(sizeof(*vio), GFP_NOIO);
+	if (!vio)
+		return -ENOMEM;
+
+	vio->bio = piece;
+	vio->vdev = vdev;
+	vio->status = BLK_STS_OK;
+	spin_lock_init(&vio->lock);
+	atomic_set(&vio->pending, 1);
+
+	for (i = 0; i < vdev->nr_members; i++)
+	{
+		struct lsv_vdev_target target = {
+			.member = &vdev->members[i],
+			.member_sector = 0,
+		};
+
+		rc = lsv_vdev_member_submit(vdev, vio, &target);
+		if (rc < 0)
+		{
+			spin_lock_irqsave(&vio->lock, flags);
+			if (vio->status == BLK_STS_OK)
+				vio->status = errno_to_blk_status(rc);
+			spin_unlock_irqrestore(&vio->lock, flags);
+		}
+	}
+
+	if (atomic_dec_and_test(&vio->pending))
+		lsv_vio_complete(vio);
+
+	return 0;
 }
 
 u64 lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member)
