@@ -120,7 +120,7 @@ static s32 lsv_bio_setup_write(struct lsv_dev *dev, struct bio *bio, u64 lba, u3
 		return rc;
 	}
 
-	vsector = (pba << lmap->cell_sect_shift) + offset;
+	vsector = lsv_lmap_data_sector(lmap, pba) + offset;
 	return lsv_vdev_submit(dev->vdev, bio, vsector);
 }
 
@@ -140,7 +140,7 @@ static s32 lsv_bio_setup_read(struct lsv_dev *dev, struct bio *bio, u64 lba, u32
 		return LSV_BIO_DONE;
 	}
 
-	vsector = (pba << lmap->cell_sect_shift) + offset;
+	vsector = lsv_lmap_data_sector(lmap, pba) + offset;
 	return lsv_vdev_submit(dev->vdev, bio, vsector);
 }
 
