@@ -133,7 +133,7 @@ static void lsv_dedup_ds_cache(struct lsv_lmap_cache *cache)
 	cache->cell_cachep = g_dedup_engine->dedup_cache.de_cachep;
 }
 
-struct lsv_dedup *lsv_dedup_create(struct lsv_lmap *lmap, struct block_device *bd)
+struct lsv_dedup *lsv_dedup_create(struct lsv_lmap *lmap, struct lsv_vdev *vdev)
 {
 	struct lsv_dedup *dedup;
 	s32 rc = -ENOMEM;
@@ -160,7 +160,7 @@ struct lsv_dedup *lsv_dedup_create(struct lsv_lmap *lmap, struct block_device *b
 		goto free_ds;
 
 	dedup->lmap = lmap;
-	dedup->bd = bd;
+	dedup->vdev = vdev;
 
 	return dedup;
 
@@ -350,12 +350,14 @@ static void lsv_dedup_verify_fn(struct work_struct *work)
 	bool same = false;
 	void *stored;
 	u64 pba;
+	sector_t vsector;
 	s32 rc;
 
 	stored = lsv_dedup_data_buf_alloc();
 	if (stored) {
 		pba = READ_ONCE(pblk->pba);
-		rc = lsv_io_read(dedup->bd, lsv_lmap_data_sector(lmap, pba), stored, LSV_DEDUP_BUF_SIZE);
+		vsector = lsv_lmap_data_sector(lmap, pba);
+		rc = lsv_vdev_io_sync(dedup->vdev, REQ_OP_READ, vsector, stored, LSV_DEDUP_BUF_SIZE);
 		same = !rc && !memcmp(vw->data, stored, LSV_DEDUP_BUF_SIZE);
 		lsv_dedup_data_buf_free(stored);
 	}
@@ -391,8 +393,11 @@ static void lsv_dedup_verify_fn(struct work_struct *work)
 	if (rc)
 		goto put_pblk;
 
-	bio->bi_iter.bi_sector = lsv_lmap_data_sector(lmap, pba);
-	submit_bio_noacct(bio);
+	vsector = lsv_lmap_data_sector(lmap, pba);
+	rc = lsv_vdev_submit(dedup->vdev, bio, vsector);
+	if (rc < 0) {
+		goto fail;
+	}
 	goto out;
 
 put_pblk:

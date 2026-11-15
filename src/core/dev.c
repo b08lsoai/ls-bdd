@@ -95,7 +95,7 @@ s32 lsv_dev_create(const struct lsv_dev_params *params, struct lsv_dev **out)
 		goto close_back;
 
 	if (params->dedup) {
-		dev->dedup = lsv_dedup_create(&dev->lmap, dev->back.bd);
+		dev->dedup = lsv_dedup_create(&dev->lmap, dev->vdev);
 		if (IS_ERR(dev->dedup)) {
 			rc = PTR_ERR(dev->dedup);
 			dev->dedup = NULL;

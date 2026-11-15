@@ -7,6 +7,7 @@
 #include <linux/types.h>
 
 #include "utils/ds_control.h"
+#include "core/vdev/vdev.h"
 
 struct lsv_dedup;
 struct lsv_lmap;
@@ -43,13 +44,13 @@ struct lsv_dedup_map {
 struct lsv_dedup {
 	struct lsv_dedup_map *map;
 	struct lsv_lmap *lmap;
-	struct block_device *bd;
+	struct lsv_vdev *vdev;
 };
 
 s32 lsv_dedup_engine_init(void);
 void lsv_dedup_engine_deinit(void);
 
-struct lsv_dedup *lsv_dedup_create(struct lsv_lmap *lmap, struct block_device *bd);
+struct lsv_dedup *lsv_dedup_create(struct lsv_lmap *lmap, struct lsv_vdev *vdev);
 void lsv_dedup_destroy(struct lsv_dedup *dedup);
 
 s32 lsv_dedup_write(struct lsv_dedup *dedup, struct bio *bio, u64 lba, struct lsv_pblk **pblk);
