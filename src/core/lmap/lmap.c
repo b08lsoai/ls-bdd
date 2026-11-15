@@ -97,10 +97,7 @@ static s32 lsv_lmap_setup_geometry(struct lsv_lmap *lmap, u32 cell_size, sector_
 	lmap->cell_sectors = cell_size >> SECTOR_SHIFT;
 	lmap->cell_sect_shift = ilog2(lmap->cell_sectors);
 
-	if (backing_sectors <= LSV_META_SECTORS)
-		return -ENOSPC;
-
-	lmap->capacity_cells = (backing_sectors - LSV_META_SECTORS) >> lmap->cell_sect_shift;
+	lmap->capacity_cells = backing_sectors >> lmap->cell_sect_shift;
 	if (!lmap->capacity_cells)
 		return -ENOSPC;
 

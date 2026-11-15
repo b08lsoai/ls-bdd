@@ -11,9 +11,6 @@
 
 #include "utils/ds_control.h"
 
-/* Sectors reserved at the head of the backing device for metadata. */
-#define LSV_META_SECTORS 32
-
 #define LSV_CELL_SIZE_MIN 512
 #define LSV_CELL_SIZE_MAX (1024 * 1024)
 #define LSV_DS_NAME_LEN 8
@@ -90,7 +87,7 @@ static inline void lsv_lmap_locate(const struct lsv_lmap *lmap, sector_t sector,
  */
 static inline sector_t lsv_lmap_data_sector(const struct lsv_lmap *lmap, u64 pba)
 {
-	return LSV_META_SECTORS + (pba << lmap->cell_sect_shift);
+	return (pba << lmap->cell_sect_shift);
 }
 
 #endif
