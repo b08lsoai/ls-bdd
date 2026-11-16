@@ -11,6 +11,7 @@
 #define LSV_CTL_MAX_BD_NAME_LENGTH 15
 #define LSV_CTL_MAX_MINORS_AM 20
 #define LSV_CTL_MAX_DS_NAME_LEN 2
+#define LSV_CTL_MAX_LAYOUT_NAME_LEN 6
 
 struct lsv_dev;
 
@@ -20,7 +21,7 @@ struct lsv_cfg_dev {
 
 	char backing_path[PATH_MAX];
 	char index_ds[LSV_CTL_MAX_DS_NAME_LEN + 1];
-	const char *layout;
+	char layout[LSV_CTL_MAX_LAYOUT_NAME_LEN + 1];
 	u32 cell_size;
 	u64 segment_size;
 	bool dedup;

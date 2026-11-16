@@ -136,7 +136,7 @@ static ssize_t lsv_cfg_dev_layout_show(struct config_item *item, char *page)
 static ssize_t lsv_cfg_dev_layout_store(struct config_item *item, const char *page, size_t count)
 {
 	struct lsv_cfg_dev *cfg = to_lsv_cfg_dev(item);
-	char buf[LSV_CTL_MAX_DS_NAME_LEN + 1];
+	char buf[LSV_CTL_MAX_LAYOUT_NAME_LEN + 1];
 	char *name;
 
 	if (!count || count >= sizeof(buf))
