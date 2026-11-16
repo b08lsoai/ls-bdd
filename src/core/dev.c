@@ -66,6 +66,7 @@ static void lsv_dev_del_disk(struct lsv_dev *dev)
 s32 lsv_dev_create(const struct lsv_dev_params *params, struct lsv_dev **out)
 {
 	struct lsv_dev *dev;
+	u32 i;
 	s32 rc;
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
@@ -113,8 +114,14 @@ s32 lsv_dev_create(const struct lsv_dev_params *params, struct lsv_dev **out)
 
 	*out = dev;
 
-	pr_info("lsv: created '%s' on %s, cell %u B, %llu cells, dedup %s\n", dev->front.name, dev->back.path,
-		dev->lmap.cell_size, dev->lmap.capacity_cells, dev->dedup ? "on" : "off");
+	pr_info("lsv: created '%s', layout %s, cell %u B, %llu cells, dedup %s\n",
+			dev->front.name, dev->vdev->ops->name,
+			dev->lmap.cell_size, dev->lmap.capacity_cells,
+			dev->dedup ? "on" : "off");
+
+	for (i = 0; i < dev->vdev->nr_members; i++)
+		pr_info("lsv: '%s': member %u on %s\n",
+				dev->front.name, i, dev->vdev->members[i].path);
 
 	return 0;
 
