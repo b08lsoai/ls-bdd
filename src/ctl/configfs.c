@@ -19,7 +19,7 @@
  * Device creation protocol:
  *
  *	mkdir /sys/kernel/config/lsv/lsv0
- *	echo /dev/nvme0n1 > /sys/kernel/config/lsv/lsv0/backing_path
+ *	echo /dev/nvme0n1 /dev/nvme1n1 > /sys/kernel/config/lsv/lsv0/back_paths
  *	echo ht		  > /sys/kernel/config/lsv/lsv0/index_ds
  *	echo raid0		  > /sys/kernel/config/lsv/lsv0/layout
  *	echo 4096	  > /sys/kernel/config/lsv/lsv0/cell_size
@@ -67,25 +67,114 @@ out:
 	return rc;
 }
 
-static ssize_t lsv_cfg_dev_backing_path_show(struct config_item *item, char *page)
+static ssize_t lsv_cfg_dev_back_paths_show(struct config_item *item, char *page)
 {
 	struct lsv_cfg_dev *cfg = to_lsv_cfg_dev(item);
-	ssize_t len;
+	u32 i;
+	ssize_t len = 0;
+	ssize_t written;
 
 	mutex_lock(&cfg->lock);
-	len = snprintf(page, PAGE_SIZE, "%s\n", cfg->backing_path);
+	for (i = 0; i < cfg->nr_members; i++)
+	{
+		written = snprintf(page + len, PAGE_SIZE - len, "%s%c", cfg->back_paths[i], i == cfg->nr_members - 1 ? '\n' : ' ');
+		if (written >= PAGE_SIZE - len)
+		{
+			len = -E2BIG;
+			break;
+		}
+		len += written;
+	}
 	mutex_unlock(&cfg->lock);
 
 	return len;
 }
 
-static ssize_t lsv_cfg_dev_backing_path_store(struct config_item *item, const char *page, size_t count)
+static ssize_t lsv_cfg_dev_back_paths_store(struct config_item *item, const char *page, size_t count)
 {
 	struct lsv_cfg_dev *cfg = to_lsv_cfg_dev(item);
+	char *page_copy, *cursor, *token;
+	u32 nr_members = 0, i = 0;
+	const char **back_paths;
+	ssize_t rc = count;
 
-	return lsv_cfg_store_str(cfg, cfg->backing_path, sizeof(cfg->backing_path), page, count);
+	if (!count)
+		return -EINVAL;
+
+	page_copy = kstrndup(page, count, GFP_KERNEL);
+	if (!page_copy)
+		return -ENOMEM;
+
+	cursor = page_copy;
+	while ((token = strsep(&cursor, " \t\n")) != NULL)
+	{
+		if (!token[0])
+			continue;
+		nr_members++;
+	}
+
+	kfree(page_copy);
+	if (!nr_members)
+		return -EINVAL;
+
+	page_copy = kstrndup(page, count, GFP_KERNEL);
+	if (!page_copy)
+		return -ENOMEM;
+
+	back_paths = kcalloc(nr_members, sizeof(*back_paths), GFP_KERNEL);
+	if (!back_paths)
+	{
+		kfree(page_copy);
+		return -ENOMEM;
+	}
+
+	cursor = page_copy;
+	while ((token = strsep(&cursor, " \t\n")) != NULL)
+	{
+		if (!token[0])
+			continue;
+
+		back_paths[i] = kstrdup(token, GFP_KERNEL);
+		if (!back_paths[i])
+		{
+			kfree(page_copy);
+			rc = -ENOMEM;
+			goto free_back_paths;
+		}
+		i++;
+	}
+	kfree(page_copy);
+
+	mutex_lock(&cfg->lock);
+
+	if (cfg->created)
+	{
+		mutex_unlock(&cfg->lock);
+		rc = -EBUSY;
+		goto free_back_paths;
+	}
+
+	if (cfg->back_paths)
+	{
+		for (i = 0; i < cfg->nr_members; i++)
+		{
+			kfree(cfg->back_paths[i]);
+		}
+		kfree(cfg->back_paths);
+	}
+	cfg->back_paths = back_paths;
+	cfg->nr_members = nr_members;
+
+	mutex_unlock(&cfg->lock);
+	return rc;
+
+free_back_paths:
+	while (i--)
+		kfree(back_paths[i]);
+	kfree(back_paths);
+	return rc;
 }
-CONFIGFS_ATTR(lsv_cfg_dev_, backing_path);
+CONFIGFS_ATTR(lsv_cfg_dev_, back_paths);
 
 static ssize_t lsv_cfg_dev_index_ds_show(struct config_item *item, char *page)
 {
@@ -285,7 +374,7 @@ static ssize_t lsv_cfg_dev_create_new_store(struct config_item *item, const char
 		goto out;
 	}
 
-	if (!cfg->backing_path[0]) {
+	if (!cfg->nr_members) {
 		rc = -EINVAL;
 		goto out;
 	}
@@ -311,7 +400,8 @@ static ssize_t lsv_cfg_dev_create_new_store(struct config_item *item, const char
 	 * parameter struct: core must not know about configfs.
 	 */
 	params.name = config_item_name(&cfg->item);
-	params.back_path = cfg->backing_path;
+	params.back_paths = cfg->back_paths;
+	params.nr_members = cfg->nr_members;
 	params.index_ds = cfg->index_ds;
 	params.layout = cfg->layout;
 	params.cell_size = cfg->cell_size;
@@ -332,7 +422,7 @@ out:
 CONFIGFS_ATTR(lsv_cfg_dev_, create_new);
 
 static struct configfs_attribute *lsv_cfg_dev_attrs[] = {
-	&lsv_cfg_dev_attr_backing_path,
+	&lsv_cfg_dev_attr_back_paths,
 	&lsv_cfg_dev_attr_index_ds,
 	&lsv_cfg_dev_attr_layout,
 	&lsv_cfg_dev_attr_cell_size,
@@ -345,11 +435,17 @@ static struct configfs_attribute *lsv_cfg_dev_attrs[] = {
 static void lsv_cfg_dev_release(struct config_item *item)
 {
 	struct lsv_cfg_dev *cfg = to_lsv_cfg_dev(item);
+	u32 i;
 
 	if (cfg->created)
 		lsv_dev_destroy(cfg->dev);
 
 	mutex_destroy(&cfg->lock);
+	for (i = 0; i < cfg->nr_members; i++)
+	{
+		kfree(cfg->back_paths[i]);
+	}
+	kfree(cfg->back_paths);
 	kfree(cfg);
 }
 

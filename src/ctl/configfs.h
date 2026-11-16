@@ -19,7 +19,8 @@ struct lsv_cfg_dev {
 	struct config_item item;
 	struct mutex lock; /* serialises attributes against create_new */
 
-	char backing_path[PATH_MAX];
+	const char **back_paths;
+	u32 nr_members;
 	char index_ds[LSV_CTL_MAX_DS_NAME_LEN + 1];
 	char layout[LSV_CTL_MAX_LAYOUT_NAME_LEN + 1];
 	u32 cell_size;
