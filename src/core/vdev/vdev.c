@@ -72,6 +72,16 @@ static void lsv_member_close(struct lsv_back *member)
 	member->path = NULL;
 }
 
+static sector_t lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member)
+{
+	sector_t sectors = bdev_nr_sectors(member->bd);
+
+	if (sectors <= LSV_MEMBER_META_SECTORS)
+		return 0;
+
+	return round_down(sectors - LSV_MEMBER_META_SECTORS, vdev->cell_sectors);
+}
+
 s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 {
 	struct lsv_vdev *vdev;
@@ -99,6 +109,8 @@ s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 		rc = lsv_member_open(&vdev->members[i], params->paths[i]);
 		if (rc)
 			goto close_members;
+
+		vdev->members[i].usable_sectors = lsv_member_usable_sectors(vdev, &vdev->members[i]);
 
 		for (j = 0; j < i; j++)
 		{
@@ -161,7 +173,7 @@ void lsv_vdev_destroy(struct lsv_vdev *vdev)
 	kfree(vdev);
 }
 
-u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)
+sector_t lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)
 {
 	return vdev->capacity_sectors;
 }
@@ -236,16 +248,6 @@ s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)
 		lsv_vio_complete(vio);
 
 	return 0;
-}
-
-u64 lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member)
-{
-	u64 sectors = bdev_nr_sectors(member->bd);
-
-	if (sectors <= LSV_MEMBER_META_SECTORS)
-		return 0;
-
-	return round_down(sectors - LSV_MEMBER_META_SECTORS, vdev->cell_sectors);
 }
 
 /*

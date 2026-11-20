@@ -4,12 +4,12 @@
 
 static s32 lsv_linear_geometry(struct lsv_vdev *vdev)
 {
-	u64 capacity = 0;
+	sector_t capacity = 0;
 	u32 i;
 
 	for (i = 0; i < vdev->nr_members; i++)
 	{
-		u64 usable = lsv_member_usable_sectors(vdev, &vdev->members[i]);
+		sector_t usable = vdev->members[i].usable_sectors;
 
 		if (!usable)
 			return -ENOSPC;
@@ -29,7 +29,7 @@ static s32 lsv_linear_submit(struct lsv_vdev *vdev, struct lsv_vio *io)
 
 	for (i = 0; i < vdev->nr_members; i++)
 	{
-		u64 usable = lsv_member_usable_sectors(vdev, &vdev->members[i]);
+		sector_t usable = vdev->members[i].usable_sectors;
 
 		if (member_offset >= usable)
 		{

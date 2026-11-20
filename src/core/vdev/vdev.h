@@ -17,6 +17,7 @@ struct lsv_back
 	char *path;
 	struct file *bd_file;
 	struct block_device *bd;
+	sector_t usable_sectors;
 };
 
 enum lsv_layout_type
@@ -89,7 +90,7 @@ struct lsv_vdev
 
 	u32 cell_sectors;
 	u32 chunk_sectors; /* Chunk size in sectors. */
-	u64 capacity_sectors; /* Usable device capacity in sectors. */
+	sector_t capacity_sectors; /* Usable device capacity in sectors. */
 
 	struct bio_set bio_set; /* BIO pool for member clones. */
 
@@ -109,7 +110,7 @@ void lsv_vdev_destroy(struct lsv_vdev *vdev);
 /*
  * Usable device capacity in sectors.
  */
-u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev);
+sector_t lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev);
 
 /* ---- Logical I/O submission ---- */
 
@@ -121,13 +122,6 @@ u64 lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev);
 s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector);
 
 s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece);
-
-/*
- * Usable member capacity in sectors, excluding the metadata reserve
- * and rounded down to whole cells.
- * Use bdev_nr_sectors(member->bd) for the underlying capacity.
- */
-u64 lsv_member_usable_sectors(const struct lsv_vdev *vdev, const struct lsv_back *member);
 
 /*
  * Synchronous read or write at vsector, waiting for completion.
