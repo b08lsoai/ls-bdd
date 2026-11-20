@@ -93,7 +93,7 @@ s32 lsv_dev_create(const struct lsv_dev_params *params, struct lsv_dev **out)
 	rc = lsv_lmap_init(&dev->lmap, params->index_ds, params->cell_size, params->segment_size,
 					   lsv_vdev_capacity_sectors(dev->vdev));
 	if (rc)
-		goto close_back;
+		goto destroy_vdev;
 
 	if (params->dedup) {
 		dev->dedup = lsv_dedup_create(&dev->lmap, dev->vdev);
@@ -129,8 +129,8 @@ destroy_dedup:
 	lsv_dedup_destroy(dev->dedup);
 deinit_lmap:
 	lsv_lmap_deinit(&dev->lmap);
-close_back:
-	lsv_dev_close_back(dev);
+destroy_vdev:
+	lsv_vdev_destroy(dev->vdev);
 free_dev:
 	kfree(dev);
 	return rc;
