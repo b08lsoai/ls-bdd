@@ -24,6 +24,7 @@ struct lsv_cfg_dev {
 	char index_ds[LSV_CTL_MAX_DS_NAME_LEN + 1];
 	char layout[LSV_CTL_MAX_LAYOUT_NAME_LEN + 1];
 	u32 cell_size;
+	u32 chunk_size;
 	u64 segment_size;
 	bool dedup;
 

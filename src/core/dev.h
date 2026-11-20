@@ -30,7 +30,7 @@ struct lsv_dev_params {
 	u32 nr_members;
 	const char *layout;
 	const char *index_ds;
-	u32 chunk_sectors;
+	u32 chunk_size;
 	u32 cell_size;
 	u64 segment_size;
 	bool dedup;

@@ -83,7 +83,7 @@ s32 lsv_dev_create(const struct lsv_dev_params *params, struct lsv_dev **out)
 		.paths = params->back_paths,
 		.nr_members = params->nr_members,
 		.cell_sectors = params->cell_size >> SECTOR_SHIFT,
-		.chunk_sectors = params->chunk_sectors,
+		.chunk_sectors = params->chunk_size >> SECTOR_SHIFT,
 	};
 
 	rc = lsv_vdev_create(&vparams, &dev->vdev);
