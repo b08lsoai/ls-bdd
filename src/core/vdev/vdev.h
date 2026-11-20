@@ -112,6 +112,9 @@ void lsv_vdev_destroy(struct lsv_vdev *vdev);
  */
 sector_t lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev);
 
+/* Minimum usable capacity across a nonempty member array. */
+sector_t lsv_vdev_min_usable_sectors(const struct lsv_vdev *vdev);
+
 /* ---- Logical I/O submission ---- */
 
 /*

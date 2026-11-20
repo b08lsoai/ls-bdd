@@ -3,6 +3,7 @@
 #include <linux/err.h>
 #include <linux/file.h>
 #include <linux/math.h>
+#include <linux/minmax.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 
@@ -171,6 +172,17 @@ void lsv_vdev_destroy(struct lsv_vdev *vdev)
 
 	kfree(vdev->members);
 	kfree(vdev);
+}
+
+sector_t lsv_vdev_min_usable_sectors(const struct lsv_vdev *vdev)
+{
+	sector_t min_usable = vdev->members[0].usable_sectors;
+	u32 i;
+
+	for (i = 1; i < vdev->nr_members; i++)
+		min_usable = min(min_usable, vdev->members[i].usable_sectors);
+
+	return min_usable;
 }
 
 sector_t lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)

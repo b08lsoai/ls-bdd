@@ -2,12 +2,15 @@
 
 #include "core/vdev/vdev.h"
 
-/*
- * Capacity = minimum usable capacity across members.
- */
-static s32 lsv_raid1_geometry(struct lsv_vdev *v)
+static s32 lsv_raid1_geometry(struct lsv_vdev *vdev)
 {
-	return -ENOSYS;
+	if (vdev->nr_members < 2)
+	{
+		return -EINVAL;
+	}
+
+	vdev->capacity_sectors = lsv_vdev_min_usable_sectors(vdev);
+	return 0;
 }
 
 /*

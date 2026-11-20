@@ -2,13 +2,26 @@
 
 #include "core/vdev/vdev.h"
 
-/*
- * Capacity = nr_members * floor(min_usable_sectors / chunk_sectors) * chunk_sectors.
- * chunk_sectors must be > 0 and a multiple of the cell size in sectors.
- */
-static s32 lsv_raid0_geometry(struct lsv_vdev *v)
+static s32 lsv_raid0_geometry(struct lsv_vdev *vdev)
 {
-	return -ENOSYS;
+	sector_t min_usable;
+	u64 chunks_per_member;
+
+	if (vdev->nr_members < 2)
+	{
+		return -EINVAL;
+	}
+
+	if (!vdev->chunk_sectors || vdev->chunk_sectors & (vdev->cell_sectors - 1))
+	{
+		return -EINVAL;
+	}
+
+	min_usable = lsv_vdev_min_usable_sectors(vdev);
+	chunks_per_member = min_usable / vdev->chunk_sectors;
+	vdev->capacity_sectors =
+		chunks_per_member * vdev->chunk_sectors * vdev->nr_members;
+	return 0;
 }
 
 /*
