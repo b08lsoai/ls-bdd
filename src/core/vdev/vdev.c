@@ -76,7 +76,7 @@ s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 {
 	struct lsv_vdev *vdev;
 	s32 rc;
-	u32 i;
+	u32 i, j;
 
 	vdev = kzalloc(sizeof(*vdev), GFP_KERNEL);
 	if (!vdev)
@@ -99,6 +99,16 @@ s32 lsv_vdev_create(const struct lsv_vdev_params *params, struct lsv_vdev **out)
 		rc = lsv_member_open(&vdev->members[i], params->paths[i]);
 		if (rc)
 			goto close_members;
+
+		for (j = 0; j < i; j++)
+		{
+			if (vdev->members[i].bd == vdev->members[j].bd)
+			{
+				lsv_member_close(&vdev->members[i]);
+				rc = -EINVAL;
+				goto close_members;
+			}
+		}
 	}
 
 	rc = bioset_init(&vdev->bio_set, BIO_POOL_SIZE, 0, BIOSET_NEED_BVECS);
