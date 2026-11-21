@@ -24,13 +24,21 @@ static s32 lsv_raid0_geometry(struct lsv_vdev *vdev)
 	return 0;
 }
 
-/*
- * Map io->vsector to (member, member_sector).
- * member_sector includes the selected member's metadata reserve.
- */
-static s32 lsv_raid0_submit(struct lsv_vdev *v, struct lsv_vio *io)
+static s32 lsv_raid0_submit(struct lsv_vdev *vdev, struct lsv_vio *io)
 {
-	return -ENOSYS;
+	struct lsv_vdev_target target;
+	sector_t chunk = vdev->chunk_sectors;
+	sector_t stripe = chunk * vdev->nr_members;
+	sector_t member_sector;
+	u32 member_index;
+
+	member_index = (io->vsector / vdev->chunk_sectors) % vdev->nr_members;
+	target.member = &vdev->members[member_index];
+
+	member_sector = (io->vsector / stripe) * chunk + (io->vsector % chunk);
+	target.member_sector = LSV_MEMBER_META_SECTORS + member_sector;
+
+	return lsv_vdev_member_submit(vdev, io, &target);
 }
 
 const struct lsv_layout_ops lsv_layout_raid0_ops = {
