@@ -262,12 +262,37 @@ s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)
 	return 0;
 }
 
-/*
- * Synchronous read or write at vsector, waiting for completion.
- */
+static void lsv_vdev_sync_endio(struct bio *bio)
+{
+	complete(bio->bi_private);
+}
+
 s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, void *buf, size_t len)
 {
-	return -ENOSYS;
+	struct bio bio;
+	struct bio_vec bv;
+	s32 rc;
+	DECLARE_COMPLETION_ONSTACK(done);
+
+	might_sleep();
+
+	if (WARN_ON_ONCE(current->bio_list))
+		return -EDEADLK;
+
+	bio_init(&bio, NULL, &bv, 1, op);
+	bio_add_virt_nofail(&bio, buf, len);
+	bio.bi_private = &done;
+	bio.bi_end_io = lsv_vdev_sync_endio;
+
+	rc = lsv_vdev_submit(vdev, &bio, vsector);
+	if (!rc)
+	{
+		wait_for_completion_io(&done);
+		rc = blk_status_to_errno(bio.bi_status);
+	}
+
+	bio_uninit(&bio);
+	return rc;
 }
 
 s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const struct lsv_vdev_target *t)
