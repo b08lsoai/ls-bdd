@@ -190,23 +190,34 @@ sector_t lsv_vdev_capacity_sectors(const struct lsv_vdev *vdev)
 	return vdev->capacity_sectors;
 }
 
+static struct lsv_vio *lsv_vio_alloc(struct lsv_vdev *vdev, struct bio *piece)
+{
+	struct lsv_vio *vio;
+
+	vio = kzalloc(sizeof(*vio), GFP_NOIO);
+	if (!vio)
+		return NULL;
+
+	vio->bio = piece;
+	vio->vdev = vdev;
+	vio->status = BLK_STS_OK;
+	spin_lock_init(&vio->lock);
+	atomic_set(&vio->pending, 1);
+
+	return vio;
+}
+
 s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector)
 {
 	struct lsv_vio *vio;
 	unsigned long flags;
 	s32 rc;
 
-	vio = kzalloc(sizeof(*vio), GFP_NOIO);
+	vio = lsv_vio_alloc(vdev, piece);
 	if (!vio)
 		return -ENOMEM;
 
-	vio->bio = piece;
-	vio->vdev = vdev;
 	vio->vsector = vsector;
-	vio->status = BLK_STS_OK;
-	spin_lock_init(&vio->lock);
-	atomic_set(&vio->pending, 1);
-
 	rc = vdev->ops->submit(vdev, vio);
 	if (rc < 0)
 	{
@@ -229,15 +240,9 @@ s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece)
 	s32 rc;
 	u32 i;
 
-	vio = kzalloc(sizeof(*vio), GFP_NOIO);
+	vio = lsv_vio_alloc(vdev, piece);
 	if (!vio)
 		return -ENOMEM;
-
-	vio->bio = piece;
-	vio->vdev = vdev;
-	vio->status = BLK_STS_OK;
-	spin_lock_init(&vio->lock);
-	atomic_set(&vio->pending, 1);
 
 	for (i = 0; i < vdev->nr_members; i++)
 	{
