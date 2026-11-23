@@ -131,9 +131,6 @@ s32 lsv_vdev_flush(struct lsv_vdev *vdev, struct bio *piece);
  */
 s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, void *buf, size_t len);
 
-/*
- * Allocate a member clone, increment pending and submit it.
- */
 s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const struct lsv_vdev_target *t);
 
 /*

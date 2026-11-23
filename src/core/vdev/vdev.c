@@ -207,6 +207,13 @@ static struct lsv_vio *lsv_vio_alloc(struct lsv_vdev *vdev, struct bio *piece)
 	return vio;
 }
 
+static void lsv_vio_complete(struct lsv_vio *io)
+{
+	io->bio->bi_status = io->status;
+	bio_endio(io->bio);
+	kfree(io);
+}
+
 s32 lsv_vdev_submit(struct lsv_vdev *vdev, struct bio *piece, sector_t vsector)
 {
 	struct lsv_vio *vio;
@@ -300,6 +307,27 @@ s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, vo
 	return rc;
 }
 
+static void lsv_member_endio(struct bio *clone)
+{
+	struct lsv_member_io *member_io = clone->bi_private;
+	struct lsv_vio *io = member_io->io;
+	unsigned long flags;
+
+	if (clone->bi_status != BLK_STS_OK)
+	{
+		spin_lock_irqsave(&io->lock, flags);
+		if (io->status == BLK_STS_OK)
+			io->status = clone->bi_status;
+		spin_unlock_irqrestore(&io->lock, flags);
+	}
+
+	bio_put(clone);
+	kfree(member_io);
+
+	if (atomic_dec_and_test(&io->pending))
+		lsv_vio_complete(io);
+}
+
 s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const struct lsv_vdev_target *t)
 {
 	struct lsv_member_io *member_io;
@@ -326,37 +354,4 @@ s32 lsv_vdev_member_submit(struct lsv_vdev *vdev, struct lsv_vio *io, const stru
 	atomic_inc(&io->pending);
 	submit_bio_noacct(clone);
 	return 0;
-}
-
-/*
- * Complete one member bio (assigned to clone->bi_end_io).
- * Linear/RAID0 policy: preserve the first error. RAID1 will need
- * layout-specific result handling before it can submit member I/O.
- */
-void lsv_member_endio(struct bio *clone)
-{
-	struct lsv_member_io *member_io = clone->bi_private;
-	struct lsv_vio *io = member_io->io;
-	unsigned long flags;
-
-	if (clone->bi_status != BLK_STS_OK)
-	{
-		spin_lock_irqsave(&io->lock, flags);
-		if (io->status == BLK_STS_OK)
-			io->status = clone->bi_status;
-		spin_unlock_irqrestore(&io->lock, flags);
-	}
-
-	bio_put(clone);
-	kfree(member_io);
-
-	if (atomic_dec_and_test(&io->pending))
-		lsv_vio_complete(io);
-}
-
-void lsv_vio_complete(struct lsv_vio *io)
-{
-	io->bio->bi_status = io->status;
-	bio_endio(io->bio);
-	kfree(io);
 }
