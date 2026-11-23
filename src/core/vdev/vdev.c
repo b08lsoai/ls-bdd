@@ -202,6 +202,7 @@ static struct lsv_vio *lsv_vio_alloc(struct lsv_vdev *vdev, struct bio *piece)
 	vio->vdev = vdev;
 	vio->status = BLK_STS_OK;
 	spin_lock_init(&vio->lock);
+	/* A clone may finish before the submitter has issued the next one. */
 	atomic_set(&vio->pending, 1);
 
 	return vio;
@@ -288,6 +289,7 @@ s32 lsv_vdev_io_sync(struct lsv_vdev *vdev, enum req_op op, sector_t vsector, vo
 
 	might_sleep();
 
+	/* Nested bios may stay queued until this task returns from submission. */
 	if (WARN_ON_ONCE(current->bio_list))
 		return -EDEADLK;
 
