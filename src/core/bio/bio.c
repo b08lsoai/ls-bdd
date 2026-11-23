@@ -176,13 +176,15 @@ static void lsv_bio_process(struct lsv_bio_req *req)
 	while (true) {
 		struct lsv_lmap_pos pos;
 		u32 chunk;
+		bool last;
 
 		lsv_lmap_locate(lmap, clone->bi_iter.bi_sector, &pos);
 		chunk = min_t(u32, pos.sectors, bio_sectors(clone));
+		last = chunk == bio_sectors(clone);
 
 		bio = clone;
 
-		if (chunk < bio_sectors(clone)) {
+		if (!last) {
 			bio = bio_split(clone, chunk, GFP_NOIO, &lmap->bio_set);
 			if (!bio) {
 				rc = -ENOMEM;
@@ -195,7 +197,7 @@ static void lsv_bio_process(struct lsv_bio_req *req)
 		if (rc < 0)
 			goto err;
 
-		if (bio == clone)
+		if (last)
 			return;
 	}
 
